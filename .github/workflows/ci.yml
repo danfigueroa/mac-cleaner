@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  # Roda só em macOS: o binário é darwin-only (cgo com Foundation para a
+  # Lixeira, syscall.Stat_t para medir blocos). Uma matriz multi-OS aqui seria
+  # teatro — não há usuário em Linux para proteger.
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verificar que go.mod está arrumado
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+      - name: Build
+        run: make build
+
+      - name: Testes com detector de corrida
+        run: make test-race
+
+      - name: Lint
+        run: make lint
