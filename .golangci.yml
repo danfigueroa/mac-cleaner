@@ -1,0 +1,160 @@
+version: "2"
+
+run:
+  timeout: 3m
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - errorlint # exige %w e errors.Is/As em vez de comparar erros por igualdade
+    - noctx # pega I/O sem context, que é justamente o que quebra o Ctrl-C
+    - revive
+    - gosec
+    # misspell fica de fora: o código é comentado em português e ele acusa
+    # "comando" como erro de "commando".
+    - unconvert
+    - copyloopvar
+    - depguard # guarda a direção de dependência entre camadas
+    - gocritic
+    - nolintlint
+    - contextcheck
+    - nilerr
+    - forcetypeassert
+    - usetesting
+
+  settings:
+    errcheck:
+      check-type-assertions: true
+      # check-blank fica desligado: `_ = f.Close()` é justamente como se declara
+      # que o erro foi considerado e descartado. Exigir nolint em cima disso
+      # trocaria uma convenção legível por ruído.
+      check-blank: false
+      exclude-functions:
+        # Toda saída de verdade é montada num strings.Builder e escrita no fim
+        # com um io.WriteString cujo erro é retornado. Um Fprintf num Builder
+        # não tem como falhar, e checá-lo linha a linha esconderia o retorno que
+        # de fato importa no meio do ruído.
+        - fmt.Fprintf
+        - fmt.Fprint
+        - fmt.Fprintln
+
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment # legibilidade das structs de domínio vale mais que padding
+
+    revive:
+      rules:
+        - name: exported # toda API exportada documentada
+        - name: error-strings
+        - name: error-return
+        - name: context-as-argument
+        - name: indent-error-flow
+        - name: unreachable-code
+        - name: var-naming
+        - name: early-return
+
+    gosec:
+      excludes:
+        # G204: a ferramenta executa comandos externos por design (docker prune,
+        # simctl delete). O que impede abuso não é evitar exec, é o catálogo ser
+        # uma lista fechada de comandos literais — nada aqui vem de entrada do
+        # usuário. O guard cobre o outro lado, os caminhos.
+        - G204
+        # G304: abrir caminhos vindos de variável é literalmente o trabalho de um
+        # scanner de disco. A proteção contra caminho indevido é o guard, que
+        # roda antes de qualquer remoção — não deixar de ler diretórios.
+        - G304
+        # G115: as conversões apontadas leem campos de struct do statfs e do
+        # lstat (st_blocks, st_dev). Os limites delas são físicos: estourar
+        # int64 em blocos de 512 bytes exigiria um volume de 4 zettabytes.
+        - G115
+
+    gocritic:
+      enabled-tags: [diagnostic, style, performance]
+      disabled-checks:
+        - ifElseChain # nem sempre um switch lê melhor
+        # hugeParam e rangeValCopy pedem ponteiros em Report, Result e Rule.
+        # Essas structs carregam dezenas de itens, não milhões, e nenhuma delas
+        # está em caminho quente — o gargalo desta CLI é syscall de disco. Trocar
+        # valores por ponteiros aqui só abriria espaço para mutação acidental do
+        # catálogo em troca de nada mensurável.
+        - hugeParam
+        - rangeValCopy
+
+    # A direção de dependência do projeto é:
+    #     domain <- catalog <- service <- cli/tui
+    #                            ^
+    #                        adapter
+    # Violá-la quebra o lint, não a revisão de código.
+    depguard:
+      rules:
+        # domain é a base: stdlib e nada mais.
+        domain:
+          files:
+            - "**/internal/domain/*.go"
+          allow:
+            - $gostd
+            - github.com/danfigueroa/mac-cleaner/internal/domain
+
+        # catalog descreve regras; não conhece serviços nem adapters.
+        catalog:
+          files:
+            - "**/internal/catalog/**/*.go"
+          allow:
+            - $gostd
+            - github.com/danfigueroa/mac-cleaner/internal/domain
+            - github.com/danfigueroa/mac-cleaner/internal/catalog
+
+        # guard é o portão de remoção. Mantê-lo minúsculo e sem dependências é
+        # parte da garantia de que dá para auditá-lo de uma sentada.
+        guard:
+          files:
+            - "**/internal/guard/*.go"
+          allow:
+            - $gostd
+            - github.com/danfigueroa/mac-cleaner/internal/domain
+            # O pacote de teste externo (guard_test) precisa importar o guard.
+            - github.com/danfigueroa/mac-cleaner/internal/guard
+
+        # Ninguém pode depender da camada de apresentação.
+        no-presentation-imports:
+          files:
+            - "!**/internal/cli/**"
+            - "!**/cmd/**"
+          deny:
+            - pkg: github.com/danfigueroa/mac-cleaner/internal/cli
+              desc: cli é o composition root; nada deve depender dele
+
+  exclusions:
+    rules:
+      # O pseudo-pacote "C" do cgo confunde o gocritic: ele o lê como um import
+      # duplicado de "unsafe" e a comparação com o retorno em C como expressão
+      # redundante. Nenhum dos dois existe.
+      - path: internal/adapter/trash/trash_cgo\.go
+        linters:
+          - gocritic
+      - path: _test\.go
+        linters:
+          - gosec
+          - errcheck
+
+formatters:
+  enable:
+    - gofumpt
+    - gci
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/danfigueroa/mac-cleaner)
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
