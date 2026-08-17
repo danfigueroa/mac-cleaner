@@ -460,6 +460,4 @@ deixaria um `docker image prune` rodando órfão.
 
 ## Licença
 
-Ainda não definida — não há arquivo `LICENSE` no repositório. Sem ele, o padrão
-legal é "todos os direitos reservados": ninguém além do autor pode usar,
-modificar ou redistribuir o código. Adicione um `LICENSE` antes de publicar.
+[MIT](LICENSE).
