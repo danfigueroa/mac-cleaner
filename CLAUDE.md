@@ -225,6 +225,10 @@ correspondente.
 **Idioma.** Comentários, mensagens de erro, saída da CLI e nomes de teste em
 **português**. Identificadores de código em inglês, seguindo o idioma da stdlib.
 
+O `README.md` é a exceção e fica em **inglês**: a interface serve quem a executa,
+o README serve quem encontra o repositório. Este arquivo permanece em português,
+por ser documentação interna.
+
 **Comentários explicam o porquê, não o quê.** Um comentário que parafraseia a
 linha seguinte é ruído. Comente decisões, restrições do sistema operacional e
 armadilhas — e prefira registrar o custo real de ter feito diferente, quando ele
